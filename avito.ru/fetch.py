@@ -1,62 +1,49 @@
 #!/usr/bin/python3
 
-from urllib.request import urlopen
-from html.parser import HTMLParser
+import json
+from urllib.request import Request, urlopen
 import xlsxwriter
 
-site = "https://www.avito.ru"
+from htmlparser import Parser
+import browser
 
-def parse_price(pstr):
-	pstr = "".join([ c for c in pstr if c in "0123456789" ])
-	if len(pstr) > 0:
-		pint = int(pstr)
-	else:
-		pint = 0
-	return pint
+cookies = {}
 
-class Parser(HTMLParser):
-	def __init__(self, *args, **kwargs):
-		super().__init__(*args, **kwargs)
-		self.level = 0
-		self.stack = []
-		self.entries = []
+def load_cookies(filename="cookies.bin"):
+	file = open(filename, "rb")
+	cookies.clear()
+	for line in file:
+		cs = line.decode("utf-8")
+		if cs.find("domain=.avito.ru") < 0:
+			continue
+		cs = cs.split(";")[0]
+		kv = cs.split("=")
+		cookies[kv[0]] = kv[1]
+	file.close()
 
-	def handle_starttag(self, tag, attrs):
-		attrs = { k: v for k, v in attrs }
-		if self.level > 0:
-			# print(" "*self.level + "<" + tag + " " + str(attrs) + ">")
-			self.level += 1
-			if attrs.get("class", "") == "item-description-title-link":
-				self.stack.append(("link", self.level))
-				self.entries[-1]["link"] = attrs["href"]
-			elif attrs.get("class", "") == "about":
-				self.stack.append(("price", self.level))
-		elif attrs.get("class", "") == "description item_table-description":
-			# print(" "*self.level + "<" + tag + " " + str(attrs) + ">")
-			self.level = 1
-			self.stack.append(("desc", self.level))
-			self.entries.append({})
-
-	def handle_endtag(self, tag):
-		if self.level > 0:
-			if self.stack[-1][1] == self.level:
-				self.stack.pop()
-			self.level -= 1
-			# print(" "*self.level + "</" + tag + ">")
-
-	def handle_data(self, data):
-		ldata = data.replace("\n", "").strip()
-		if self.level > 0 and len(ldata) > 0:
-			# print(" "*self.level + ldata)
-			if self.stack[-1][0] == "link":
-				self.entries[-1]["name"] = ldata
-			elif self.stack[-1][0] == "price":
-				self.entries[-1]["price"] = parse_price(ldata)
-
+try:
+	load_cookies()
+except:
+	print("error loading cookies file, generating new one ...")
+	browser.load_cookies()
+	load_cookies()
+print(cookies)
 
 def search(city, query):
 	mquery = query.replace(" ", "+")
-	html = urlopen(site + "/" + city + "?q=" + mquery).read().decode("utf-8")
+	req = Request(
+		"https://www.avito.ru/" + city + "?q=" + mquery,
+		headers={
+			"User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:54.0) Gecko/20100101 Firefox/54.0",
+			"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+			"Accept-Language": "en-US,en;q=0.5",
+			"Connection": "keep-alive",
+			"Cookie": ";".join(["%s=%s" % (k,v) for k,v in cookies.items()]),
+		}
+	)
+	res = urlopen(req)
+	print(str(res.getcode()) + " - %s, %s" % (city, query))
+	html = res.read().decode("utf-8")
 
 	parser = Parser()
 	parser.feed(html)
@@ -78,50 +65,48 @@ def filter(entry):
 				return None
 	return entry
 
+qfile = open("queries.json", "r", encoding="utf-8")
+qdata = json.loads(qfile.read())
+qfile.close()
+print(qdata)
 
-cities = [
-	"novosibirsk",
-	"barnaul"
-]
-queries = [
-	"RX 480",
-	"GTX 970",
-]
+cities = [ c[0] for c in qdata["cities"] ]
+cities_names = { c[0]: c[1] for c in qdata["cities"] }
+
+queries = qdata["queries"]
 cols = [
 	"city",
 	"query",
 	"name",
 	"link",
-	"price"
+	"date",
+	"price",
 ]
 cols_width = {
 	"city": 20,
 	"query": 10,
 	"name": 50,
 	"link": 20,
-	"price": 10
+	"price": 10,
+	"date": 20
 }
-local_cols = {
+cols_names = {
 	"city":  "Город",
 	"query": "Запрос",
 	"name":  "Наименование",
 	"link":  "Ссылка",
-	"price": "Цена, руб"
-}
-
-local_cities = {
-	"novosibirsk": "Новосибирск",
-	"barnaul":     "Барнаул"
+	"price": "Цена, руб",
+	"date": "Дата"
 }
 
 def write(ws, row, entry):
 	for i, c in enumerate(cols):
 		if c == "city":
 			sn = entry[c]
-			sn = local_cities.get(sn, sn)
+			sn = cities_names.get(sn, sn)
 			ws.write_string(row, i, sn)
 		elif c == "link":
-			ws.write_url(row, i, site + entry[c])
+			ws.write_url(row, i, "https://www.avito.ru" + entry[c])
 		elif c == "price":
 			ws.write_number(row, i, entry[c])
 		else:
@@ -132,7 +117,7 @@ row = 0
 wb = xlsxwriter.Workbook("results.xlsx")
 ws = wb.add_worksheet()
 for i, c in enumerate(cols):
-	ws.write_string(row, i, local_cols[c])
+	ws.write_string(row, i, cols_names[c])
 	if c in cols_width.keys():
 		ws.set_column(i, i, cols_width[c])
 row += 2
@@ -152,4 +137,7 @@ for city in cities:
 			row += 1
 		row += 1
 
-wb.close()
+try:
+	wb.close()
+except:
+	print("Cannot save the workbook, maybe it's opened by you? Please, close all programs that use it, and restart parser")
