@@ -38,8 +38,8 @@ def load_cookies():
 	app = QApplication(sys.argv)
 
 	browser = WebView()
-	browser.load(QUrl("https://www.avito.ru"))
 	browser.loadFinished.connect(lambda ok: browser.close())
+	browser.load(QUrl("https://www.avito.ru"))
 	browser.show()
 
 	app.exec_()
