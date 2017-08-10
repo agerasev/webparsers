@@ -1,31 +1,47 @@
 #!/usr/bin/python3
 
 import json
+import re
 from urllib.request import Request, urlopen
 import xlsxwriter
 
 from htmlparser import Parser
-import browser
 
 cookies = {}
 
+def generate_cookies(filename="cookies.bin"):
+	req = Request(
+		"https://www.avito.ru/",
+		headers={
+			"User-Agent": "Mozilla/5.0 (Windows NT 10.0; WOW64; rv:54.0) Gecko/20100101 Firefox/54.0",
+			"Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+			"Accept-Language": "en-US,en;q=0.5",
+			"Connection": "keep-alive",
+		}
+	)
+	res = urlopen(req)
+	print(str(res.getcode()) + " - cookies")
+	raw_cookies = res.getheader("Set-Cookie")
+	print(raw_cookies)
+	file = open(filename, "w")
+	file.write(raw_cookies)
+	file.close()
+
 def load_cookies(filename="cookies.bin"):
-	file = open(filename, "rb")
+	file = open(filename, "r")
+	s = file.read()
 	cookies.clear()
-	for line in file:
-		cs = line.decode("utf-8")
-		if cs.find("domain=.avito.ru") < 0:
-			continue
-		cs = cs.split(";")[0]
-		kv = cs.split("=")
-		cookies[kv[0]] = kv[1]
+	s = re.sub("expires=[^;]*;", "", s)
+	for kv in s.strip().split(","):
+		(k, v) = tuple(kv.strip().split(";")[0].strip().split("="))
+		cookies[k] = v
 	file.close()
 
 try:
 	load_cookies()
 except:
 	print("error loading cookies file, generating new one ...")
-	browser.load_cookies()
+	generate_cookies()
 	load_cookies()
 print(cookies)
 
