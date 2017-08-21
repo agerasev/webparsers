@@ -1,18 +1,18 @@
 import sys
 
-from PyQt4.QtCore import QUrl
-from PyQt4.QtGui import QApplication
-from PyQt4.QtWebKit import QWebView
-from PyQt4.QtNetwork import QNetworkCookie
+from PyQt5.QtCore import QUrl
+from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWebKitWidgets import QWebView
+from PyQt5.QtNetwork import QNetworkCookie
 
 class WebView(QWebView):
 	def __init__(self):
 		super().__init__()
-		self.load_cookies()
+		#self.load_cookies()
 
-	def closeEvent(self, event):
-		self.dump_cookies()
-		super().closeEvent(event)
+	#def closeEvent(self, event):
+	#	#self.dump_cookies()
+	#	super().closeEvent(event)
 
 	def load_cookies(self, filename="cookies.bin"):
 		raw = b""
@@ -38,7 +38,7 @@ def load_cookies():
 	app = QApplication(sys.argv)
 
 	browser = WebView()
-	browser.loadFinished.connect(lambda ok: browser.close())
+	#browser.loadFinished.connect(lambda ok: browser.close())
 	browser.load(QUrl("https://www.avito.ru"))
 	browser.show()
 
