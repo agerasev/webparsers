@@ -35,20 +35,22 @@ ofn = sys.argv[-1]
 owb = xlsxwriter.Workbook(ofn)
 ows = owb.add_worksheet()
 
-synonyms = []
 encoding = "utf-8"
-for word in words:
-	print("get '%s'" % word)
-	req = Request(
-		"http://synonymonline.ru/assets/json/synonyms.json",
-		data=("word=%s" % word).encode(encoding),
-		headers=headers
-	)
-	res = urlopen(req).read().decode(encoding)
-	synonyms.append(json.loads(res))
+for i, word in enumerate(words):
+	try:
+		print("get '%s'" % word)
+		req = Request(
+			"http://synonymonline.ru/assets/json/synonyms.json",
+			data=("word=%s" % word).encode(encoding),
+			headers=headers
+		)
+		res = urlopen(req).read().decode(encoding)
+		res = json.loads(res)
 
-for i, res in enumerate(synonyms):
-	ows.write(i, 0, res["word"])
-	ows.write(i, 1, res["word_baseform"])
-	ows.write(i, 2, ", ".join(res["synonyms"]))
+		ows.write(i, 0, res["word"])
+		ows.write(i, 1, res["word_baseform"])
+		ows.write(i, 2, ", ".join(res["synonyms"]))
+	except:
+		print("error")
+
 owb.close()
